@@ -7,7 +7,12 @@ const {
   generateMessage,
   generateLocationMessage,
 } = require("./utils/messages");
-const { addUser, removeUser, getUser } = require("./utils/users");
+const {
+  addUser,
+  removeUser,
+  getUser,
+  getUsersInRoom,
+} = require("./utils/users");
 
 const app = express();
 const server = http.createServer(app);
@@ -37,6 +42,10 @@ io.on("connection", (socket) => {
         "message",
         generateMessage("Admin", `${user.username} has joined the chat!`)
       );
+    io.to(user.room).emit("roomData", {
+      room: user.room,
+      users: getUsersInRoom(user.room),
+    });
 
     callback();
   });
@@ -73,6 +82,10 @@ io.on("connection", (socket) => {
         "message",
         generateMessage("Admin", `${user.username} has left the chat.`)
       );
+      io.to(user.room).emit("roomData", {
+        room: user.room,
+        users: getUsersInRoom(user.room),
+      });
     }
   });
 });
