@@ -3,6 +3,11 @@ const http = require("http");
 const express = require("express");
 const socketio = require("socket.io");
 const Filter = require("bad-words");
+const {
+  generateMessage,
+  generateLocationMessage,
+} = require("./utils/messages");
+const { addUser, removeUser, getUser } = require("./utils/users");
 
 const app = express();
 const server = http.createServer(app);
@@ -16,30 +21,58 @@ app.use(express.static(publicDirectoryPath));
 io.on("connection", (socket) => {
   console.log("New WebSocket connection.");
 
-  socket.emit("message", "Welcome!");
-  socket.broadcast.emit("message", "A new user has joined!");
+  socket.on("join", (options, callback) => {
+    const { error, user } = addUser({ id: socket.id, ...options });
+
+    if (error) {
+      return callback(error);
+    }
+
+    socket.join(user.room);
+
+    socket.emit("message", generateMessage("Welcome!"));
+    socket.broadcast
+      .to(user.room)
+      .emit(
+        "message",
+        generateMessage(`${user.username} has joined the chat!`)
+      );
+
+    callback();
+  });
 
   socket.on("sendMessage", (message, callback) => {
+    const user = getUser(socket.id);
     const filter = new Filter();
 
     if (filter.isProfane(message)) {
       return callback("Profanity is not allowed.");
     }
 
-    io.emit("message", message);
+    io.to(user.room).emit("message", generateMessage(message));
     callback();
   });
 
   socket.on("sendLocation", (location, callback) => {
-    io.emit(
+    const user = getUser(socket.id);
+    io.to(user.room).emit(
       "locationMessage",
-      `https://www.google.com/maps?q=${location.latitude},${location.longitude}`
+      generateLocationMessage(
+        `https://www.google.com/maps?q=${location.latitude},${location.longitude}`
+      )
     );
     callback();
   });
 
   socket.on("disconnect", () => {
-    io.emit("message", "a user has left.");
+    const user = removeUser(socket.id);
+
+    if (user) {
+      io.to(user.room).emit(
+        "message",
+        generateMessage(`${user.username} has left the chat.`)
+      );
+    }
   });
 });
 
